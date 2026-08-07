@@ -124,6 +124,73 @@ def test_deepseek_deprecated_aliases_price_as_v4_flash():
 
 
 
+def test_deepseek_route_resolves_from_base_url_without_provider():
+    """A direct-DeepSeek call recorded with only a base_url (provider=None or
+    empty) must still resolve to provider='deepseek', not 'unknown'.
+
+    The gateway's per-call accounting can reach estimate_usage_cost with an
+    unset provider (the session row carries the provider, but the call site
+    does not always). Before this fix, resolve_billing_route fell through to
+    provider='unknown', get_pricing_entry returned None, and every direct
+    DeepSeek session priced as cost_status='unknown' — leaving 3.4k rows of
+    deepseek-v4-flash usage un-estimated in state.db."""
+    route = resolve_billing_route(
+        "deepseek-v4-flash",
+        provider=None,
+        base_url="https://api.deepseek.com/v1",
+    )
+    assert route.provider == "deepseek"
+    assert route.billing_mode == "official_docs_snapshot"
+
+    entry = get_pricing_entry(
+        "deepseek-v4-flash",
+        provider=None,
+        base_url="https://api.deepseek.com/v1",
+    )
+    assert entry is not None
+    assert entry.source == "official_docs_snapshot"
+
+    # Prefixed model name must also resolve when provider is not passed.
+    route2 = resolve_billing_route(
+        "deepseek/deepseek-v4-flash",
+        provider=None,
+        base_url="https://api.deepseek.com/v1",
+    )
+    assert route2.provider == "deepseek"
+    assert route2.model == "deepseek-v4-flash"
+
+
+
+
+def test_deepseek_estimate_with_cache_write_is_estimated():
+    """DeepSeek entries must carry a cache-write rate so cached sessions
+    price as 'estimated' rather than 'unknown'.
+
+    The official docs snapshot lists input/output/cache-read only, but the
+    OpenAI-compat shape can surface cache_write_tokens (and DeepSeek bills
+    cache creation at the input rate). Before this fix, a usage object with
+    cache_write_tokens>0 short-circuited estimate_usage_cost to
+    status='unknown' with 'cache-write pricing unavailable for route'."""
+    usage = CanonicalUsage(
+        input_tokens=250,
+        output_tokens=300,
+        cache_read_tokens=1200,
+        cache_write_tokens=50,
+    )
+    result = estimate_usage_cost(
+        "deepseek-v4-flash",
+        usage,
+        provider=None,
+        base_url="https://api.deepseek.com/v1",
+    )
+    assert result.status == "estimated"
+    assert result.source == "official_docs_snapshot"
+    assert result.amount_usd is not None
+    assert result.amount_usd > 0
+
+
+
+
 def test_bedrock_claude_rows_all_carry_cache_pricing():
     """Invariant: every Bedrock Claude pricing row must carry cache-read AND
     cache-write rates, otherwise a cached session prices as ``unknown``.
