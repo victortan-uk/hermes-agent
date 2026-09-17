@@ -69,9 +69,13 @@ _REASONING_STALE_TIMEOUT_FLOORS: tuple[tuple[str, int], ...] = (
     # DeepSeek — R1 and V4 reasoning models on hosted NIM / DeepSeek direct.
     # V4 series emits reasoning_content in a separate delta field before
     # final content, requiring the same extended stale timeout floor.
+    # ``deepseek-flash`` is the version-less canonical Flash id (2026-09 Flash
+    # refresh); ``deepseek-v4-flash`` still aliases onto it server-side.
     ("deepseek-r1", 600),
     ("deepseek-reasoner", 600),
+    ("deepseek-flash", 600),
     ("deepseek-v4-flash", 600),
+    ("deepseek-v4.1-flash", 600),
     ("deepseek-v4-pro", 600),
     # Qwen — QwQ reasoning + Qwen3 thinking variants.  QwQ-32B
     # preview is the stable slug; ``qwen3`` covers the family of

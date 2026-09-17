@@ -463,52 +463,64 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
         pricing_version="anthropic-pricing-2026-05",
     ),
     # DeepSeek
-    # Snapshot of https://api-docs.deepseek.com/quick_start/pricing (2026-07).
-    # deepseek-chat / deepseek-reasoner are deprecated 2026-07-24 and now alias
-    # deepseek-v4-flash's non-thinking / thinking modes — same rates.
+    # Snapshot of https://api-docs.deepseek.com/quick_start/pricing (2026-09-10, off-peak USD;
+    # peak = 2x, Mon-Fri 01-04 + 06-10 UTC). ``deepseek-flash`` is the version-less canonical
+    # Flash id; ``deepseek-v4-flash`` and the retired deepseek-chat / deepseek-reasoner aliases
+    # are served by the same V4.1-Flash model at the Flash price.
     (
         "deepseek",
-        "deepseek-chat",
+        "deepseek-flash",
     ): PricingEntry(
-        input_cost_per_million=Decimal("0.14"),
-        output_cost_per_million=Decimal("0.28"),
-        cache_read_cost_per_million=Decimal("0.0028"),
+        input_cost_per_million=Decimal("0.15"),
+        output_cost_per_million=Decimal("0.60"),
+        cache_read_cost_per_million=Decimal("0.003"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
-        pricing_version="deepseek-pricing-2026-07",
-    ),
-    (
-        "deepseek",
-        "deepseek-reasoner",
-    ): PricingEntry(
-        input_cost_per_million=Decimal("0.14"),
-        output_cost_per_million=Decimal("0.28"),
-        cache_read_cost_per_million=Decimal("0.0028"),
-        source="official_docs_snapshot",
-        source_url="https://api-docs.deepseek.com/quick_start/pricing",
-        pricing_version="deepseek-pricing-2026-07",
-    ),
-    (
-        "deepseek",
-        "deepseek-v4-pro",
-    ): PricingEntry(
-        input_cost_per_million=Decimal("0.435"),
-        output_cost_per_million=Decimal("0.87"),
-        cache_read_cost_per_million=Decimal("0.003625"),
-        source="official_docs_snapshot",
-        source_url="https://api-docs.deepseek.com/quick_start/pricing",
-        pricing_version="deepseek-pricing-2026-07",
+        pricing_version="deepseek-pricing-2026-09-10",
     ),
     (
         "deepseek",
         "deepseek-v4-flash",
     ): PricingEntry(
-        input_cost_per_million=Decimal("0.14"),
-        output_cost_per_million=Decimal("0.28"),
-        cache_read_cost_per_million=Decimal("0.0028"),
+        input_cost_per_million=Decimal("0.15"),
+        output_cost_per_million=Decimal("0.60"),
+        cache_read_cost_per_million=Decimal("0.003"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
-        pricing_version="deepseek-pricing-2026-07",
+        pricing_version="deepseek-pricing-2026-09-10",
+    ),
+    (
+        "deepseek",
+        "deepseek-chat",
+    ): PricingEntry(
+        input_cost_per_million=Decimal("0.15"),
+        output_cost_per_million=Decimal("0.60"),
+        cache_read_cost_per_million=Decimal("0.003"),
+        source="official_docs_snapshot",
+        source_url="https://api-docs.deepseek.com/quick_start/pricing",
+        pricing_version="deepseek-pricing-2026-09-10",
+    ),
+    (
+        "deepseek",
+        "deepseek-reasoner",
+    ): PricingEntry(
+        input_cost_per_million=Decimal("0.15"),
+        output_cost_per_million=Decimal("0.60"),
+        cache_read_cost_per_million=Decimal("0.003"),
+        source="official_docs_snapshot",
+        source_url="https://api-docs.deepseek.com/quick_start/pricing",
+        pricing_version="deepseek-pricing-2026-09-10",
+    ),
+    (
+        "deepseek",
+        "deepseek-v4-pro",
+    ): PricingEntry(
+        input_cost_per_million=Decimal("0.66"),
+        output_cost_per_million=Decimal("1.98"),
+        cache_read_cost_per_million=Decimal("0.022"),
+        source="official_docs_snapshot",
+        source_url="https://api-docs.deepseek.com/quick_start/pricing",
+        pricing_version="deepseek-pricing-2026-09-10",
     ),
     # Google Gemini
     (

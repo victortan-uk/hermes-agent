@@ -12,14 +12,14 @@ Different LLM providers expect model identifiers in different formats:
   model IDs, but Claude still uses hyphenated native names like
   ``claude-sonnet-4-6``.
 - **OpenCode Go** preserves dots in model names: ``minimax-m2.7``.
-- **DeepSeek** accepts only the first-class V-series IDs
-  (``deepseek-v4-pro``, ``deepseek-v4-flash``, and any future
-  ``deepseek-v<N>-*``).  The legacy aliases ``deepseek-chat`` and
-  ``deepseek-reasoner`` were retired on 2026-07-24 and are remapped to
-  ``deepseek-v4-flash`` (official non-thinking / thinking shims).  Older
-  Hermes revisions folded every non-reasoner input into
-  ``deepseek-chat``, which on aggregators routes to V3 — so a user
-  picking V4 Pro was silently downgraded.
+- **DeepSeek** passes every id through as typed, except the two retired
+  aliases ``deepseek-chat`` and ``deepseek-reasoner`` (cut off 2026-07-24),
+  which fold onto the current Flash id ``deepseek-flash`` — thinking mode
+  is controlled by ``extra_body.thinking`` on the profile.  A shape-based
+  allow-list used to rewrite unknown names onto ``deepseek-v4-flash``,
+  which swallowed the vendor's own version-less ``deepseek-flash`` id the
+  day it shipped (#107206); every other id now reaches the wire as typed
+  so the API's own error names the valid models.
 - **Custom** and remaining providers pass the name through as-is.
 
 This module centralises that translation so callers can simply write::
@@ -31,7 +31,6 @@ Inspired by Clawdbot's ``normalizeAnthropicModelId`` pattern.
 
 from __future__ import annotations
 
-import re
 from typing import Optional
 
 # ---------------------------------------------------------------------------
@@ -138,76 +137,22 @@ _LOWERCASE_MODEL_PROVIDERS: frozenset[str] = frozenset({
 # 2026-07-24 cut-off.  Legacy aliases and fuzzy names are remapped here so
 # saved configs / picker leftovers cannot keep sending retired IDs.
 
-_DEEPSEEK_REASONER_KEYWORDS: frozenset[str] = frozenset({
-    "reasoner",
-    "r1",
-    "think",
-    "reasoning",
-    "cot",
-})
-
-# Retired on 2026-07-24 15:59 UTC. Official docs: both aliases mapped to
-# deepseek-v4-flash (chat = non-thinking, reasoner = thinking). Thinking
-# mode itself is controlled by extra_body.thinking on the DeepSeek profile.
-_DEEPSEEK_RETIRED_ALIASES: frozenset[str] = frozenset({
-    "deepseek-chat",
-    "deepseek-reasoner",
-})
-
-_DEEPSEEK_CANONICAL_MODELS: frozenset[str] = frozenset({
-    "deepseek-v4-pro",     # V4 Pro — first-class model ID
-    "deepseek-v4-flash",   # V4 Flash — first-class model ID
-})
-
-# First-class V-series IDs (``deepseek-v4-pro``, ``deepseek-v4-flash``,
-# future ``deepseek-v5-*``, dated variants like ``deepseek-v4-flash-20260423``).
-# Verified empirically 2026-04-24: DeepSeek's Chat Completions API returns
-# ``provider: DeepSeek`` / ``model: deepseek-v4-flash-20260423`` when called
-# with ``model=deepseek/deepseek-v4-flash``, so these names are not aliases
-# of ``deepseek-chat`` and must not be folded into it.
-_DEEPSEEK_V_SERIES_RE = re.compile(r"^deepseek-v\d+([-.].+)?$")
+# DeepSeek retired ``deepseek-chat`` / ``deepseek-reasoner`` on 2026-07-24 (HTTP 400 since);
+# saved configs still carry them, so they fold onto the current Flash id (thinking mode is
+# controlled by extra_body.thinking on the profile). Every other id is the user's call and
+# goes to the wire as typed: a shape-based allow-list swallowed the vendor's own
+# ``deepseek-flash`` the day it shipped (#107206), and any new id without a ``v<N>`` marker
+# would have met the same fate.
+_DEEPSEEK_RETIRED_ALIASES: dict[str, str] = {
+    "deepseek-chat": "deepseek-flash",
+    "deepseek-reasoner": "deepseek-flash",
+}
 
 
 def _normalize_for_deepseek(model_name: str) -> str:
-    """Map a model input to a DeepSeek-accepted identifier.
-
-    Rules:
-    - Retired aliases ``deepseek-chat`` / ``deepseek-reasoner`` (cut off
-      2026-07-24) -> ``deepseek-v4-flash``.
-    - Already a known canonical (``deepseek-v4-pro``/``deepseek-v4-flash``)
-      -> pass through.
-    - Matches the V-series pattern ``deepseek-v<digit>...`` -> pass through
-      (covers future ``deepseek-v5-*`` and dated variants without a release).
-    - Contains a reasoner keyword (r1, think, reasoning, cot, reasoner)
-      -> ``deepseek-v4-flash``.
-    - Everything else -> ``deepseek-v4-flash``.
-
-    Args:
-        model_name: The bare model name (vendor prefix already stripped).
-
-    Returns:
-        A DeepSeek-accepted model identifier.
-    """
+    """Fold retired DeepSeek aliases onto their replacement; pass everything else through."""
     bare = _strip_vendor_prefix(model_name).lower()
-
-    # Retired aliases must rewrite — DeepSeek returns HTTP 400 after the
-    # 2026-07-24 cut-off if these IDs are sent on the wire.
-    if bare in _DEEPSEEK_RETIRED_ALIASES:
-        return "deepseek-v4-flash"
-
-    if bare in _DEEPSEEK_CANONICAL_MODELS:
-        return bare
-
-    # V-series first-class IDs (v4-pro, v4-flash, future v5-*, dated variants)
-    if _DEEPSEEK_V_SERIES_RE.match(bare):
-        return bare
-
-    # Check for reasoner-like keywords anywhere in the name
-    for keyword in _DEEPSEEK_REASONER_KEYWORDS:
-        if keyword in bare:
-            return "deepseek-v4-flash"
-
-    return "deepseek-v4-flash"
+    return _DEEPSEEK_RETIRED_ALIASES.get(bare, bare)
 
 
 # ---------------------------------------------------------------------------
@@ -468,14 +413,11 @@ def normalize_model_for_provider(model_input: str, target_provider: str) -> str:
         >>> normalize_model_for_provider("minimax-m2.5-free", "opencode-zen")
         'minimax-m2.5-free'
 
-        >>> normalize_model_for_provider("deepseek-v3", "deepseek")
-        'deepseek-v4-flash'
-
-        >>> normalize_model_for_provider("deepseek-r1", "deepseek")
-        'deepseek-v4-flash'
-
         >>> normalize_model_for_provider("deepseek-reasoner", "deepseek")
-        'deepseek-v4-flash'
+        'deepseek-flash'
+
+        >>> normalize_model_for_provider("deepseek-flash", "deepseek")
+        'deepseek-flash'
 
         >>> normalize_model_for_provider("my-model", "custom")
         'my-model'

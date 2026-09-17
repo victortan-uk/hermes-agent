@@ -17,7 +17,7 @@ Non-thinking models (``deepseek-v3-*`` variants) are left as no-ops so we
 don't perturb the V3 wire format.
 
 The legacy aliases ``deepseek-chat`` / ``deepseek-reasoner`` were retired on
-2026-07-24.  Use ``deepseek-v4-flash`` or ``deepseek-v4-pro``; Hermes remaps
+2026-07-24.  Use ``deepseek-flash`` or ``deepseek-v4-pro``; Hermes remaps
 the retired IDs in ``hermes_cli.model_normalize``.
 """
 
@@ -29,16 +29,27 @@ from providers import register_provider
 from providers.base import ProviderProfile
 
 
+# Version-less canonical ids for thinking-capable DeepSeek models. The 2026-09 Flash
+# refresh dropped the ``v<N>`` marker from the public id: ``GET /v1/models`` reports
+# ``deepseek-flash`` and the API accepts it directly, so the generation check in
+# ``_model_supports_thinking`` cannot recognise it.
+_THINKING_CAPABLE_IDS: frozenset[str] = frozenset({"deepseek-flash"})
+
+
 def _model_supports_thinking(model: str | None) -> bool:
     """DeepSeek thinking-capable model families.
 
-    Currently covers the V4 family (``deepseek-v4-pro``, ``deepseek-v4-flash``,
+    Currently covers the V4 family (``deepseek-v4-pro``, ``deepseek-flash``,
     and any future ``deepseek-v4-*`` variants).  Retired aliases are remapped
     before requests leave Hermes, so they are not listed here.
     """
     m = (model or "").strip().lower()
     if not m:
         return False
+    # Version-less canonicals (``deepseek-flash``) carry the same thinking-mode
+    # contract as the V-series but no ``v<N>`` marker — consult the id set too.
+    if m in _THINKING_CAPABLE_IDS:
+        return True
     if m.startswith("deepseek-v") and not m.startswith("deepseek-v3"):
         # deepseek-v4-*, deepseek-v5-*, etc. — every V4+ generation has
         # thinking. v3 explicitly excluded.
@@ -93,10 +104,10 @@ deepseek = DeepSeekProfile(
     signup_url="https://platform.deepseek.com/",
     fallback_models=(
         "deepseek-v4-pro",
-        "deepseek-v4-flash",
+        "deepseek-flash",
     ),
     base_url="https://api.deepseek.com/v1",
-    default_aux_model="deepseek-v4-flash",
+    default_aux_model="deepseek-flash",
 )
 
 register_provider(deepseek)
