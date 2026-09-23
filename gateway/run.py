@@ -17637,6 +17637,63 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                 _response_time, _api_calls, _resp_len,
             )
 
+            # Record a delivery obligation before returning to the adapter.
+            # During SIGTERM shutdown the gateway's active-agent drain can
+            # observe this coroutine as complete before the adapter's outer
+            # handler reaches its normal send block.  If the adapter is then
+            # disconnected, the old ledger hook is never reached and a
+            # successfully-generated answer is lost.  The adapter records the
+            # same stable id again immediately before sending, so this is
+            # idempotent on the normal path.  Skip responses whose post-
+            # processing can change the text or create attachments; those are
+            # still handled by the adapter's existing final-send ledger.
+            _pre_delivery_text = str(response or "").strip()
+            _event_text_for_ledger = str(getattr(event, "text", "") or "").lstrip()
+            _pre_delivery_safe = (
+                bool(_pre_delivery_text)
+                and not bool(agent_result.get("already_sent"))
+                and not _intentional_silence
+                and not _event_text_for_ledger.startswith(("/", "!"))
+                and not any(
+                    marker in _pre_delivery_text
+                    for marker in (
+                        "MEDIA:", "[[", "![", "http://", "https://",
+                        "/home/", "/tmp/",
+                    )
+                )
+            )
+            if _pre_delivery_safe:
+                try:
+                    from gateway.delivery_ledger import (
+                        compute_obligation_id,
+                        ledger_enabled,
+                        record_obligation,
+                    )
+
+                    if await asyncio.to_thread(ledger_enabled):
+                        _pre_delivery_obligation_id = compute_obligation_id(
+                            session_key,
+                            str(getattr(event, "message_id", "") or ""),
+                            _pre_delivery_text,
+                        )
+                        await asyncio.to_thread(
+                            record_obligation,
+                            obligation_id=_pre_delivery_obligation_id,
+                            session_key=session_key,
+                            platform=str(
+                                getattr(source.platform, "value", source.platform)
+                            ),
+                            chat_id=source.chat_id,
+                            thread_id=getattr(source, "thread_id", None),
+                            content=_pre_delivery_text,
+                        )
+                except Exception:
+                    # Delivery protection is best-effort and must never turn a
+                    # successful agent response into a gateway failure.
+                    logger.debug(
+                        "pre-delivery ledger record failed", exc_info=True
+                    )
+
             # NOTE: the cross-process cache-coherence re-baseline
             # (_refresh_agent_cache_message_count) is intentionally deferred
             # until AFTER this turn's transcript persistence block below — it
