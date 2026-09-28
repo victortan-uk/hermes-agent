@@ -473,6 +473,7 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
         input_cost_per_million=Decimal("0.14"),
         output_cost_per_million=Decimal("0.28"),
         cache_read_cost_per_million=Decimal("0.0028"),
+        cache_write_cost_per_million=Decimal("0.14"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
         pricing_version="deepseek-pricing-2026-07",
@@ -484,6 +485,7 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
         input_cost_per_million=Decimal("0.14"),
         output_cost_per_million=Decimal("0.28"),
         cache_read_cost_per_million=Decimal("0.0028"),
+        cache_write_cost_per_million=Decimal("0.14"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
         pricing_version="deepseek-pricing-2026-07",
@@ -495,6 +497,7 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
         input_cost_per_million=Decimal("0.435"),
         output_cost_per_million=Decimal("0.87"),
         cache_read_cost_per_million=Decimal("0.003625"),
+        cache_write_cost_per_million=Decimal("0.435"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
         pricing_version="deepseek-pricing-2026-07",
@@ -506,6 +509,7 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
         input_cost_per_million=Decimal("0.14"),
         output_cost_per_million=Decimal("0.28"),
         cache_read_cost_per_million=Decimal("0.0028"),
+        cache_write_cost_per_million=Decimal("0.14"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
         pricing_version="deepseek-pricing-2026-07",
@@ -997,7 +1001,7 @@ def resolve_billing_route(
     model = (model_name or "").strip()
     if not provider_name and "/" in model:
         inferred_provider, bare_model = model.split("/", 1)
-        if inferred_provider in {"anthropic", "openai", "google"}:
+        if inferred_provider in {"anthropic", "openai", "google", "deepseek"}:
             provider_name = inferred_provider
             model = bare_model
 
@@ -1032,6 +1036,14 @@ def resolve_billing_route(
         # Fireworks model ids look like accounts/fireworks/models/<name>;
         # rsplit("/", 1)[-1] yields just <name> which is what the dict keys on.
         return BillingRoute(provider="fireworks", model=model.rsplit("/", 1)[-1], base_url=base_url or "", billing_mode="official_docs_snapshot")
+    # Direct DeepSeek (api.deepseek.com).  DeepSeek's OpenAI-compatible
+    # endpoint reports usage but the /models metadata carries no pricing
+    # fields, so the docs snapshot is the only reliable source; resolve the
+    # route by provider name OR host so a bare-model call (provider=None)
+    # still lands on the ("deepseek", <model>) pricing keys instead of
+    # falling through to provider="unknown" and estimating as $0/unknown.
+    if provider_name == "deepseek" or base_url_host_matches(base_url or "", "api.deepseek.com"):
+        return BillingRoute(provider="deepseek", model=model.split("/")[-1], base_url=base_url or "", billing_mode="official_docs_snapshot")
     if provider_name in {"custom", "local"} or (base and "localhost" in base):
         return BillingRoute(provider=provider_name or "custom", model=model, base_url=base_url or "", billing_mode="unknown")
     return BillingRoute(provider=provider_name or "unknown", model=model.split("/")[-1] if model else "", base_url=base_url or "", billing_mode="unknown")
