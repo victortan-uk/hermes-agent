@@ -1856,7 +1856,7 @@ class GoalManager:
                     "  auxiliary:\n"
                     "    goal_judge:\n"
                     "      provider: deepseek\n"
-                    "      model: deepseek-flash\n"
+                    "      model: deepseek-v4-flash\n"
                     "Then /goal resume to continue."
                 ),
             }
